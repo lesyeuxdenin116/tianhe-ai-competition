@@ -163,7 +163,7 @@ export default function AIChat({ answers, result }) {
     try {
       const response = await fetch(`/api/chat?_=${Date.now()}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
           messages: [
             { role: 'system', content: buildSystemPrompt(answers, result) },
@@ -182,18 +182,19 @@ export default function AIChat({ answers, result }) {
         } catch {
           detail = text.substring(0, 200);
         }
-        const vId = response.headers.get('x-vercel-id') || '';
-        const vCache = response.headers.get('x-vercel-cache') || '';
-        throw new Error(`${response.status}｜${detail}｜${vId}｜cache:${vCache}`);
+        throw new Error(detail || `请求失败(${response.status})`);
       }
 
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || '抱歉，没有获取到回复，请重试。';
       setMessages(prev => [...prev, { role: 'assistant', content }]);
     } catch (err) {
+      const isNetworkIssue = !err.message || err.message.includes('405') || err.message.includes('Failed to fetch') || err.message.includes('NetworkError');
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `❌ ${err.message}\n\n请稍后重试。`,
+        content: isNetworkIssue
+          ? '⚠️ AI追问功能在当前网络环境下暂不可用。\n\n这不影响上方的政策匹配结果（那些是100%离线计算的）。如需使用AI追问，请尝试在电脑浏览器中打开本页面。'
+          : `❌ ${err.message}\n\n请稍后重试。`,
       }]);
     } finally {
       setLoading(false);

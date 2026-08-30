@@ -1,25 +1,38 @@
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Cache-Control', 'no-store');
+export const config = { runtime: 'edge' };
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+export default async function handler(request) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Cache-Control': 'no-store',
+    'Content-Type': 'application/json',
+  };
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 200, headers });
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Only POST allowed' });
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Only POST allowed' }), { status: 405, headers });
   }
 
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'API key not configured' });
+    return new Response(JSON.stringify({ error: 'API key not configured' }), { status: 500, headers });
   }
 
-  const { messages } = req.body;
+  let messages;
+  try {
+    const text = await request.text();
+    const body = JSON.parse(text);
+    messages = body.messages;
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid request body' }), { status: 400, headers });
+  }
+
   if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: 'Invalid request' });
+    return new Response(JSON.stringify({ error: 'Invalid request' }), { status: 400, headers });
   }
 
   try {
@@ -40,11 +53,11 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(response.status).json(data);
+      return new Response(JSON.stringify(data), { status: response.status, headers });
     }
 
-    return res.status(200).json(data);
-  } catch (err) {
-    return res.status(500).json({ error: 'Failed to reach DeepSeek API' });
+    return new Response(JSON.stringify(data), { status: 200, headers });
+  } catch {
+    return new Response(JSON.stringify({ error: 'Failed to reach DeepSeek API' }), { status: 500, headers });
   }
 }
