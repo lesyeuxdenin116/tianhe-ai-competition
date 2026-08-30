@@ -174,8 +174,15 @@ export default function AIChat({ answers, result }) {
       });
 
       if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || `请求失败：${response.status}`);
+        const text = await response.text();
+        let detail;
+        try {
+          const data = JSON.parse(text);
+          detail = data.error?.message || data.error || text;
+        } catch {
+          detail = text.substring(0, 200);
+        }
+        throw new Error(`${response.status}｜${detail}`);
       }
 
       const data = await response.json();
