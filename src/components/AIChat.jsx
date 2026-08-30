@@ -1,5 +1,88 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { POLICIES } from '../data/policies.js';
+
+function formatInline(text) {
+  const result = [];
+  let remaining = text;
+  let key = 0;
+
+  while (remaining.length > 0) {
+    const boldMatch = remaining.match(/^(.*?)\*\*(.*?)\*\*([\s\S]*)$/);
+    if (boldMatch) {
+      if (boldMatch[1]) result.push(boldMatch[1]);
+      result.push(<strong key={key++}>{boldMatch[2]}</strong>);
+      remaining = boldMatch[3];
+      continue;
+    }
+    const italicMatch = remaining.match(/^(.*?)\*(.*?)\*([\s\S]*)$/);
+    if (italicMatch && !italicMatch[2].startsWith('*')) {
+      if (italicMatch[1]) result.push(italicMatch[1]);
+      result.push(<em key={key++}>{italicMatch[2]}</em>);
+      remaining = italicMatch[3];
+      continue;
+    }
+    const codeMatch = remaining.match(/^(.*?)`(.*?)`([\s\S]*)$/);
+    if (codeMatch) {
+      if (codeMatch[1]) result.push(codeMatch[1]);
+      result.push(<code key={key++} className="bg-slate-100 text-slate-700 px-1 rounded text-xs">{codeMatch[2]}</code>);
+      remaining = codeMatch[3];
+      continue;
+    }
+    result.push(remaining);
+    break;
+  }
+  return result;
+}
+
+function ChatMarkdown({ content }) {
+  const elements = useMemo(() => {
+    const lines = content.split('\n');
+    const result = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      if (line.match(/^[-*•]\s/)) {
+        const items = [];
+        while (i < lines.length && lines[i].match(/^[-*•]\s/)) {
+          items.push(lines[i].replace(/^[-*•]\s/, ''));
+          i++;
+        }
+        result.push(
+          <ul key={result.length} className="list-disc list-inside space-y-0.5 my-1 ml-1">
+            {items.map((item, j) => <li key={j}>{formatInline(item)}</li>)}
+          </ul>
+        );
+        continue;
+      }
+
+      if (line.match(/^\d+[.)]\s/)) {
+        const items = [];
+        while (i < lines.length && lines[i].match(/^\d+[.)]\s/)) {
+          items.push(lines[i].replace(/^\d+[.)]\s/, ''));
+          i++;
+        }
+        result.push(
+          <ol key={result.length} className="list-decimal list-inside space-y-0.5 my-1 ml-1">
+            {items.map((item, j) => <li key={j}>{formatInline(item)}</li>)}
+          </ol>
+        );
+        continue;
+      }
+
+      if (line.trim() === '') {
+        result.push(<div key={result.length} className="h-2" />);
+      } else {
+        result.push(<p key={result.length} className="my-0.5">{formatInline(line)}</p>);
+      }
+      i++;
+    }
+    return result;
+  }, [content]);
+
+  return <div className="text-sm leading-relaxed">{elements}</div>;
+}
 
 function buildSystemPrompt(answers, result) {
   const policyContext = POLICIES.map(p =>
@@ -137,7 +220,10 @@ export default function AIChat({ answers, result }) {
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={msg.role === 'user' ? 'chat-user' : 'chat-ai'}>
-                  <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
+                  {msg.role === 'user'
+                    ? <p className="text-sm leading-relaxed">{msg.content}</p>
+                    : <ChatMarkdown content={msg.content} />
+                  }
                 </div>
               </div>
             ))}
