@@ -161,7 +161,7 @@ export default function AIChat({ answers, result }) {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(`/api/chat?_=${Date.now()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -182,7 +182,9 @@ export default function AIChat({ answers, result }) {
         } catch {
           detail = text.substring(0, 200);
         }
-        throw new Error(`${response.status}｜${detail}`);
+        const vId = response.headers.get('x-vercel-id') || '';
+        const vCache = response.headers.get('x-vercel-cache') || '';
+        throw new Error(`${response.status}｜${detail}｜${vId}｜cache:${vCache}`);
       }
 
       const data = await response.json();
