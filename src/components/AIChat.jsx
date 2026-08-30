@@ -1,8 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { POLICIES } from '../data/policies.js';
 
-const API_KEY_STORAGE = 'tianhe_deepseek_key';
-
 function buildSystemPrompt(answers, result) {
   const policyContext = POLICIES.map(p =>
     `【${p.name}】（${p.category}）\n资格条件：${p.eligibility_text}\n办理流程：${p.process || '见官方网站'}\n${p.notes ? '注意：' + p.notes : ''}`
@@ -51,9 +49,6 @@ export default function AIChat({ answers, result }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(API_KEY_STORAGE) || '');
-  const [showKeyInput, setShowKeyInput] = useState(false);
-  const [keyDraft, setKeyDraft] = useState('');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -77,38 +72,27 @@ export default function AIChat({ answers, result }) {
   async function handleSend() {
     if (!input.trim() || loading) return;
 
-    if (!apiKey) {
-      setShowKeyInput(true);
-      return;
-    }
-
     const userMsg = { role: 'user', content: input.trim() };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
 
     try {
-      const response = await fetch('https://api.deepseek.com/chat/completions', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'deepseek-chat',
           messages: [
             { role: 'system', content: buildSystemPrompt(answers, result) },
             ...messages.filter(m => m.role !== 'assistant' || messages.indexOf(m) > 0).map(m => ({ role: m.role, content: m.content })),
             userMsg,
           ],
-          max_tokens: 1000,
-          temperature: 0.3,
         }),
       });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || `API错误：${response.status}`);
+        throw new Error(err.error?.message || `请求失败：${response.status}`);
       }
 
       const data = await response.json();
@@ -117,17 +101,11 @@ export default function AIChat({ answers, result }) {
     } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `❌ 请求失败：${err.message}\n\n请检查你的 API Key 是否正确，或稍后重试。`,
+        content: `❌ ${err.message}\n\n请稍后重试。`,
       }]);
     } finally {
       setLoading(false);
     }
-  }
-
-  function saveApiKey() {
-    localStorage.setItem(API_KEY_STORAGE, keyDraft);
-    setApiKey(keyDraft);
-    setShowKeyInput(false);
   }
 
   return (
@@ -154,30 +132,6 @@ export default function AIChat({ answers, result }) {
 
       {isOpen && (
         <div className="border-t border-slate-100">
-          {/* API key setup */}
-          {showKeyInput && (
-            <div className="px-4 py-4 bg-slate-50 border-b border-slate-100">
-              <p className="text-sm font-medium text-slate-700 mb-1">请输入 DeepSeek API Key</p>
-              <p className="text-xs text-slate-400 mb-3">Key 仅保存在你的设备上，不会上传任何服务器。可在 <a href="https://platform.deepseek.com" target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">platform.deepseek.com</a> 免费注册获取。</p>
-              <input
-                type="password"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 mb-2"
-                placeholder="sk-..."
-                value={keyDraft}
-                onChange={e => setKeyDraft(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && saveApiKey()}
-              />
-              <div className="flex gap-2">
-                <button onClick={saveApiKey} className="btn-primary py-2 text-sm" disabled={!keyDraft.trim()}>
-                  保存并继续
-                </button>
-                <button onClick={() => setShowKeyInput(false)} className="btn-ghost py-2 text-sm">
-                  取消
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Messages area */}
           <div className="h-72 overflow-y-auto px-4 py-4 space-y-3">
             {messages.map((msg, i) => (
@@ -203,44 +157,27 @@ export default function AIChat({ answers, result }) {
 
           {/* Input area */}
           <div className="px-4 pb-4 border-t border-slate-100 pt-3">
-            {apiKey ? (
-              <div className="flex gap-2">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                  placeholder="输入你的问题..."
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                  disabled={loading}
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || loading}
-                  className="bg-brand-700 hover:bg-brand-800 disabled:bg-slate-200 text-white rounded-xl px-4 py-2.5 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </button>
-              </div>
-            ) : (
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                placeholder="输入你的问题..."
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                disabled={loading}
+              />
               <button
-                onClick={() => setShowKeyInput(true)}
-                className="w-full border-2 border-dashed border-brand-200 text-brand-600 rounded-xl py-3 text-sm font-medium hover:bg-brand-50 transition-colors"
+                onClick={handleSend}
+                disabled={!input.trim() || loading}
+                className="bg-brand-700 hover:bg-brand-800 disabled:bg-slate-200 text-white rounded-xl px-4 py-2.5 transition-colors"
               >
-                点击配置 DeepSeek API Key 以启用 AI 追问
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
               </button>
-            )}
-            {apiKey && (
-              <button
-                onClick={() => { setShowKeyInput(true); setKeyDraft(apiKey); }}
-                className="mt-1.5 text-xs text-slate-400 hover:text-slate-600"
-              >
-                重新设置 API Key
-              </button>
-            )}
+            </div>
           </div>
         </div>
       )}
